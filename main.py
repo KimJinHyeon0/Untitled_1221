@@ -1,6 +1,6 @@
 from configs import Config
 from utils import *
-
+from model import Model
 
 @dataclass
 class Delivery:
@@ -42,12 +42,18 @@ class Pro:
 
     completed: list = field(default_factory=list)
 
+    waited_time: int = field(default=0)
+    elapsed_time: int = field(default=0)
+    extra_time: int = field(default=0)
+    distance: float = field(default=0)
+
 
 def main() -> None:
     df_delivery = pd.DataFrame.from_dict([Delivery() for _ in range(Config.num_delivery)])
     df_pro = pd.DataFrame.from_dict([Pro() for _ in range(Config.num_pro)])
-    visualize(df_delivery, df_pro)
-
+    # visualize(df_delivery, df_pro)
+    model = Model(df_delivery, df_pro)
+    model.run()
 
 if __name__ == '__main__':
     main()
