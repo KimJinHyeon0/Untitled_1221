@@ -4,6 +4,33 @@ import plotly.graph_objects as go
 import random
 import string
 import pandas as pd
+from math import radians, cos, sin, asin, sqrt
+
+
+def haversine(lon1, lat1, lon2, lat2) -> float:
+    lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
+
+    # haversine formula
+    dlon = lon2 - lon1
+    dlat = lat2 - lat1
+    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+    c = 2 * asin(sqrt(a))
+    r = 6371
+    return round(c * r, 2)
+
+
+def generate_random_coor(lon1, lat1, time):
+    lon_per_km = 0.00901
+    lat_per_km = 0.01126
+    dlon = min(lon_per_km * Config.max_distance, time * Config.speed_limit / 60)
+    dlat = min(lat_per_km * Config.max_distance, time * Config.speed_limit / 60)
+
+    lon2, lat2 = 0, 0
+    while not (Config.min_distance <= haversine(lon1, lat1, lon2, lat2) <= Config.max_distance):
+        lon2 = random.uniform(lon1 - dlon, lon1 + dlon)
+        lat2 = random.uniform(lat1 - dlat, lat1 + dlat)
+
+    return lon2, lat2
 
 
 def generate_id_delivery() -> str:
@@ -38,40 +65,12 @@ def generate_elapsed_time() -> int:
     return random.randint(Config.min_elapsed_time, Config.max_elapsed_time)
 
 
-@dataclass
-class Delivery:
-    id: str = field(default_factory=generate_id_delivery)
-
-    src_lat: float = field(default_factory=generate_lat)
-    src_lon: float = field(default_factory=generate_lon)
-
-    dst_lat: float = field(default_factory=generate_lat)
-    dst_lon: float = field(default_factory=generate_lon)
-
-    baggage: int = field(default_factory=generate_baggage)
-
-    start_time: int = field(default_factory=generate_start_time)
-    elapsed_time: int = field(default_factory=generate_elapsed_time)
-    end_time: int = field(init=False, default=0)
-
-    assigned: str = field(default_factory=str)
-
-    def __post_init__(self):
-        self.end_time = self.start_time + self.elapsed_time
+def min2clock(x):
+    return f'{str(x // 60).zfill(2)}:{str(x % 60).zfill(2)}'
 
 
-
-@dataclass
-class Pro:
-    id: str = field(default_factory=generate_id_pro)
-
-    pre_lat: float = field(default_factory=generate_lat)
-    pre_lon: float = field(default_factory=generate_lon)
-
-    max_cap: int = field(default_factory=generate_capacity)
-    cur_cap: int = field(default=0)
-
-    completed: list = field(default_factory=list)
+def distance2time(x):
+    return round(x / Config.speed_limit * 60)
 
 
 def visualize(deliveries, pros):
@@ -80,7 +79,9 @@ def visualize(deliveries, pros):
                        mapbox=dict(
                            center={"lat": 37.563383, "lon": 126.996039},
                            style="carto-positron",
-                           zoom=10.5)
+                           zoom=10.5),
+                       hovermode='closest',
+                       legend=dict(groupclick='toggleitem'),
                        )
 
     # Delivery
@@ -91,25 +92,30 @@ def visualize(deliveries, pros):
             lon=[row.src_lon, row.dst_lon],
             lat=[row.src_lat, row.dst_lat],
             legendgroup='group',
-            legendgrouptitle=dict(text='Delivery'),
+            legendgrouptitle=dict(font=dict(size=15), text='Delivery'),
             hovertemplate=[
                 '<br>'.join([
                     f'Source',
+                    f'Distance: {row.distance}km',
+                    f'Estimated time: {row.estimated}min',
                     f'Baggage: {row.baggage}',
-                    f'Pickup time: {str(row.start_time // 60).zfill(2)}:{str(row.start_time % 60).zfill(2)}',
-                    f'Elapsed time: {row.elapsed_time}m',
-                    f'Expire time: {str(row.end_time // 60).zfill(2)}:{str(row.end_time % 60).zfill(2)}',
+                    f'Pickup time: {min2clock(row.start_time)}',
+                    f'Interval time: {row.interval_time}min',
+                    f'Expire time: {min2clock(row.end_time)}',
                 ]),
                 '<br>'.join([
                     f'Destination',
+                    f'Distance: {row.distance}km',
+                    f'Estimated time: {row.estimated}min',
                     f'Baggage: {row.baggage}',
-                    f'Pickup time: {str(row.start_time // 60).zfill(2)}:{str(row.start_time % 60).zfill(2)}',
-                    f'Elapsed time: {row.elapsed_time}m',
-                    f'Expire time: {str(row.end_time // 60).zfill(2)}:{str(row.end_time % 60).zfill(2)}',
+                    f'Pickup time: {min2clock(row.start_time)}',
+                    f'Interval time: {row.interval_time}min',
+                    f'Expire time: {min2clock(row.end_time)}',
                 ]),
             ],
             marker=dict(size=15, color=['blue', 'red']),
             line=dict(color='grey'),
+            opacity=0.5,
         ))
 
     # Pro
@@ -120,8 +126,12 @@ def visualize(deliveries, pros):
             lon=[row.pre_lon],
             lat=[row.pre_lat],
             legendgroup='group2',
-            legendgrouptitle=dict(text='Pro'),
-            hovertemplate=f'Capability : {row.cur_cap}/{row.max_cap}',
+            legendgrouptitle=dict(font=dict(size=15), text='Pro'),
+            hovertemplate='<br>'.join([
+                    f'Capacity: {row.cur_cap}/{row.max_cap}',
+                    f'Completed : {row.completed}',
+                    f'Num.Completed : {len(row.completed)}',
+                ]),
             marker=dict(size=15, color='orange'),
         ))
 
